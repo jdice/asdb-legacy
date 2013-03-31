@@ -1,0 +1,34 @@
+# means that it's an indicator, you can't change it
+* means that it's a control, you can change it
+Indented means that it is complete.
+
+	# Current Lat - numberbox
+	# Current Lon - numberbox
+	# Goal Lat - numberbox
+	# Goal Lon - numberbox
+	# Mouse Lat - numberbox
+	# Mouse Lon - numberbox
+
+	* Drivetrain Enabled - toggle
+	* Steering Enabled - toggle
+	* Headlight Enabled - toggle
+	# GPSLock Enabled - toggle
+	* Follow Mouse - toggle
+	# Left Bumper - toggle
+	# Right Bumper - toggle
+	* Bumper Reset - button
+meh * STOP - button
+	* Manual/Automatic - toggle
+
+	# Speed - numberbox
+	# Max Speed - numberbox
+	* Goal Speed - slider
+
+# Distance to Goal - numberbox
+	# Current Heading - knob, altered
+	# Goal Heading - knob, altered
+	* Waypoint Behavior - dropdownList
+
+	-- Extra debug controls
+	# Steering Servo Value - numberbox
+	# ESC Value - numberbox
