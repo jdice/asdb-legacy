@@ -193,7 +193,7 @@ void processJSONData(){
   }
   if(!jsonError){
     // Status Buttons
-    guiDrivetrain.setValue(xbeeStop);
+    guiDrivetrain.setValue(!xbeeStop);
     guiGPSLock.setValue(gpsLock);
     // Sensor Buttons
     guiLeftBumper.setValue(leftBumper);
@@ -263,6 +263,12 @@ void drawPoint(color myColor, XYPt xy){
     float radius = max((float) (2*xy.getRadius()), (float) cameraHeight/80);
     ellipse( (float) xy.getX(), (float) xy.getY(), radius, radius);
   popStyle();
+}
+
+void keyPressed(){
+  if(key != CODED){
+    myPort.write(key);
+  }
 }
 
 boolean sketchFullScreen() {

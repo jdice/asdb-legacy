@@ -3,14 +3,13 @@
 #include <aJSON.h>
 #include <Wire.h>
 #include <FreeSixIMU.h>
-#include <FIMU_ADXL345.h>
+#include <FIMU_ADXL345.h>  
 #include <FIMU_ITG3200.h>
 #define PMTK_SET_NMEA_UPDATE_10HZ "$PMTK220,100*2F"
 #define PMTK_SET_NMEA_OUTPUT_RMCONLY "$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29"
 
 double goalSpeed = 6.5; //miles per hour
 double speedTolerance = 0.5; // +/- miles per hour
-const boolean debugPrint = false;
 const boolean jsonPrint = true;
 boolean drivetrainEnabled = false;
 boolean adjustMySpeed = true;
@@ -25,11 +24,9 @@ const int lockLED =  13;
 unsigned long timer100, timer500, brakeTimer;
 void gpsdump(TinyGPS &gps);
 boolean feedgps();
-void printFloat(double f, int digits = 2);
 unsigned long timestarted; //------------------------------------------------
-const int escPin = 11;
 int pointid = 0;
-char waypointBehavior = 's'; // r means reverse at end of goalpoints, l means loop through goalpoints, s means stop at final goalpoint
+char waypointBehavior = 'l'; // r means reverse at end of goalpoints, l means loop through goalpoints, s means stop at final goalpoint
 boolean waypointDirection = true; // true means traverse waypoints in order, false reverses the order, this is managed by the car
 double currentSpeed = 0;
 int speedValue = 100;
@@ -41,7 +38,9 @@ aJsonStream serial_stream(&Serial3);
 //steering
 boolean steeringEnabled = true;
 PWMServo steeringServo;
-const int centerSteeringTuningValue = 83; // lower means more right, higher means more left
+const int centerSteeringTuningValue = 90; // lower means more right, higher means more left
+const int fullRightSteeringTuningValue = 58;
+const int fullLeftSteeringTuningValue = 116;
 int steeringAngle = centerSteeringTuningValue;
 float turnAngle;
 
@@ -81,18 +80,12 @@ void setup()
   Serial2.println(PMTK_SET_NMEA_UPDATE_10HZ);
   Wire.begin();
   imuSixDOF.init();
-  
-  if(debugPrint){
-    Serial3.print("asdb is running.");
-    Serial3.println();
-  }
   debugInfo = "asdb is running.";
   steeringServo.attach(SERVO_PIN_A); //pin 11
   speedControl.attach(SERVO_PIN_B); //pin 12
   pinMode(lockLED, OUTPUT);
   pinMode(leftBumperPin, INPUT);
   pinMode(rightBumperPin, INPUT);
-  pinMode(escPin, OUTPUT);
 }
 
 aJsonObject *createMessage()
@@ -148,30 +141,6 @@ aJsonObject *createMessage()
   return msg;
 }
 
-void printFloat(double number, int digits){
-  if(number < 0.0){ // Handle negative numbers
-    Serial3.print('-');
-    number = -number;
-  }
-  double rounding = 0.5;  // Round correctly so that print(1.999, 2) prints as "2.00"
-  for (uint8_t i=0; i<digits; ++i){
-    rounding /= 10.0;
-  }
-  number += rounding;
-  unsigned long int_part = (unsigned long)number;  // Extract the integer part of the number and print it
-  double remainder = number - (double)int_part;
-  Serial3.print(int_part);
-  if(digits > 0){  // Print the decimal point, but only if there are digits beyond
-    Serial3.print(".");
-  }
-  while (digits-- > 0){ // Extract digits from the remainder one at a time
-    remainder *= 10.0;
-    int toPrint = int(remainder);
-    Serial3.print(toPrint);
-    remainder -= toPrint; 
-  }
-}
-
 float getTurnAngle(float goalHeading, float currentHeading){
   float turnAngle;
   turnAngle = goalHeading - currentHeading;
@@ -203,7 +172,8 @@ void gpsdump(TinyGPS &gps){
 // Jewell Track with cutout at stands towards 50 line of field
 //float goal[] = {39.24695, -94.41040, 3.0, 39.24676, -94.41022, 3.0, 39.24670, -94.40990, 3.0, 39.24679, -94.40964, 3.0, 39.24696, -94.40945, 3.0, 39.24748, -94.40943, 3.0, 39.24791, -94.40943, 3.0, 39.24804, -94.40952, 3.0, 39.24813, -94.40968, 3.0, 39.24820, -94.40990, 3.0, 39.24809, -94.41022, 3.0, 39.24775, -94.41030, 3.0, 39.24743, -94.41020, 3.0};
 
-float goal[] = {
+//Jewell Track replaced 2013-04-25
+/*float goal[] = {
 39.24736, -94.41043, 3.0,
 39.24704, -94.41045, 3.0,
 39.24680, -94.41031, 3.0,
@@ -216,9 +186,32 @@ float goal[] = {
 39.24819, -94.40981, 3.0,
 39.24810, -94.41021, 3.0,
 39.24793, -94.41038, 3.0,
-39.24752, -94.41044, 3.0};
+39.24752, -94.41044, 3.0};*/
 
-/* old Jewell Track replaced 03/29/2013
+//Jewell Track 2013-04-25, recorded at 3pm
+float goal[] = {
+39.24742, -94.41036, 3.0,
+39.24710, -94.41037, 3.0,
+39.24687, -94.41032, 3.0,
+39.24673, -94.40995, 3.0,
+39.24685, -94.40956, 3.0,
+39.24704, -94.40944, 3.0,
+39.24740, -94.40939, 3.0,
+39.24784, -94.40939, 3.0,
+39.24815, -94.40960, 3.0,
+39.24823, -94.40980, 3.0,
+39.24810, -94.41024, 3.0,
+39.24792, -94.41037, 3.0,
+39.24758, -94.41037, 3.0};
+
+//Jewell Track triangle in the south end of the field
+/*float goal[] = {
+39.24735, -94.4104, 3.0,
+39.24736, -94.41017, 3.0,
+39.24735, -94.40979, 3.0};*/
+
+
+/* old Jewell Track replaced 2013-03-29
 float goal[] = {
 39.24697, -94.41041, 3.0,
 39.24676, -94.41022, 3.0,
@@ -264,12 +257,11 @@ float goal[] = {
   }
   
   if(turnAngle <= 0){
-    steeringAngle = map(turnAngle, -180, 0, 116, centerSteeringTuningValue);
+    steeringAngle = map(turnAngle, -180, 0, fullLeftSteeringTuningValue, centerSteeringTuningValue);
   }else{
-    steeringAngle = map(turnAngle, 0, 180, centerSteeringTuningValue, 64);
+    steeringAngle = map(turnAngle, 0, 180, centerSteeringTuningValue, fullRightSteeringTuningValue);
   }
   
-  steeringAngle = map(turnAngle, -180, 180, 116, 64); // we think 116 and 64 are the physical bounds on the steering capabilities. Change the "degree bounds" as desired
   distanceToGoal = gps.distance_between(currentLat, currentLon, goalLat, goalLon);
   if(distanceToGoal < goal[pointid+2]){ //check if location is within accuracy range of point
     if(waypointBehavior == 's'){
@@ -281,7 +273,7 @@ float goal[] = {
       }
     }else if(waypointBehavior == 'r'){
       if(waypointDirection){
-        if((pointid+3) < (sizeof(goal)/4)){ // check to see if there is a "next" point, if not, start course from the first goalpoint
+        if((pointid+3) < (sizeof(goal)/4)){ // check to see if there is a "next" point, if not, reverse course
           pointid += 3;
         }else{
           waypointDirection = false;
@@ -307,54 +299,7 @@ float goal[] = {
       }
     }
   }
-  if(debugPrint){
-    Serial3.print(" Current Goal:");
-    printFloat(goal[pointid], 5);
-    Serial3.print(", ");
-    printFloat(goal[pointid+1], 5);
-    Serial3.println();
-    Serial3.print(" Distance to Current Goal:");
-    Serial3.print(gps.distance_between(currentLat, currentLon, goal[pointid], goal[pointid+1]));
-    Serial3.println();
-    Serial3.println();
-    Serial3.print("Lat/Long(float): ");
-    printFloat(flat, 5);
-    Serial3.print(", ");
-    printFloat(flon, 5);
-    Serial3.print(" Fix age: ");
-    Serial3.print(age);
-    Serial3.print(" ms.");
-    Serial3.println();
-    Serial3.print(" Heading:");
-    Serial3.print(currentHeading);
-    Serial3.print(" degrees.");
-    Serial3.println();
-    Serial3.print(" Course_to:");
-    Serial3.print(goalHeading);
-    Serial3.print(" degrees.");
-    Serial3.println();
-    Serial3.print(" Turn Angle:");
-    Serial3.print(turnAngle);
-    Serial3.print(" degrees.");
-    Serial3.println();
-    Serial3.print(" Steering Servo:");
-    Serial3.print(steeringAngle);
-    Serial3.println();
-    Serial3.print("Speed: ");
-    Serial3.print(currentSpeed); 
-    Serial3.print("MPH");
-    Serial3.println();
-    Serial3.print("Speed Value: ");
-    Serial3.print(speedValue);
-    Serial3.println();
-    Serial3.print("Maximum Speed Attained: ");
-    Serial3.print(maxSpeed);
-    Serial3.println();
-    Serial3.println(rangefinderValue);
-  }
-
   feedgps();
-
 }
 
 
@@ -372,15 +317,9 @@ void adjustSpeed(){
   if(adjustMySpeed){
     if( (currentSpeed > (goalSpeed + speedTolerance)) && (speedValue < 85) ){
       speedValue++;
-      if(debugPrint){
-        Serial3.println("\nSLOWER -- SLOWER -- SLOWER -- SLOWER -- SLOWER -- SLOWER -- SLOWER -- SLOWER -- SLOWER -- SLOWER -- SLOWER!\n");
-      }
     }
     if( (currentSpeed < (goalSpeed - speedTolerance)) && (speedValue > 65) ){
       speedValue--;
-      if(debugPrint){
-        Serial3.println("\nFASTER -- FASTER -- FASTER -- FASTER -- FASTER -- FASTER -- FASTER -- FASTER -- FASTER -- FASTER -- FASTER!\n");
-      }
     }
   }
 }
@@ -488,7 +427,7 @@ void loop()
     }else{
       adjustedSpeedValue = 100; // stop the car if drivetrain is disabled.
     }
-  }   
+  }
   
   speedControl.write(adjustedSpeedValue);
   
@@ -523,12 +462,6 @@ void loop()
   if (newdata){
     digitalWrite(lockLED, HIGH);
     gpsLock = true;
-    if(debugPrint){
-      Serial3.println();
-      Serial3.println("-------------");
-      Serial3.println("Acquired Data");
-      Serial3.println("-------------");
-    }
     gpsdump(gps);
   }else{
     digitalWrite(lockLED, LOW);
