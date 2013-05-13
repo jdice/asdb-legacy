@@ -7,12 +7,15 @@ import java.lang.Math;
 import controlP5.*;
 
 // Application Settings
-boolean fullScreen = true;
+boolean fullScreen = false;
 boolean doSerial = true;
 boolean doTestPointMove = false;
 float defaultPointSize = 5.0;
 
-//Make a Queue for history location data
+// Clipboard Setup
+ClipHelper clippy = new ClipHelper();
+
+// Make a Queue for history location data
 String inString;
 String theData;
 JSONObject jsonData;
@@ -44,14 +47,16 @@ int maxGoalSpeed = 15;
 // controlP5 objects
 ControlP5 cp5;
 float testTheta = 0;
-Numberbox guiCurrentLat, guiCurrentLon, guiGoalLat, guiGoalLon, guiMouseLat, guiMouseLon, guiServo, guiESC, guiRangefinder, guiDriveBattery, guiCurrentSpeed, guiMaxSpeed, guiDistanceToGoal;
+Numberbox guiCurrentLat, guiCurrentLon, guiGoalLat, guiGoalLon, guiMouseLat, guiMouseLon, guiServo, guiESC, guiRangefinder, guiDriveBattery, guiLoopNumber, guiCurrentSpeed, guiMaxSpeed, guiDistanceToGoal;
 Toggle guiDrivetrain, guiSteering, guiHeadlight, guiGPSLock, guiFollowMouse, guiLeftBumper, guiRightBumper, guiManualAutomatic, guiDebugVisible;
+Button guiCopyPosition;
 DropdownList guiWaypointBehavior;
 Knob guiCurrentHeading, guiGoalHeading;
 Slider guiGoalSpeed;
 
 // data from car
 boolean stopOverrides = false, steeringEnabled = false, xbeeStop = true, drivetrainEnabled = false, headlightEnabled = false, adjustMySpeed = false, gpsLock = false; // myStatus
+int loopNumber = 0; //myStatus
 double rangefinderValue = 0, driveBatteryVoltage = 0; //mySensors
 boolean leftBumper = false, rightBumper = false; //mySensors
 double currentLat = 39.24745, currentLon = -94.40990, goalLat = 39.24745, goalLon = -94.40990, distanceToGoal = 0; //myLocation
@@ -67,8 +72,8 @@ void setup(){
     windowWidth = displayWidth;
     windowHeight = displayHeight;
   }else{
-    windowWidth = 800;
-    windowHeight = 600;
+    windowWidth = 668;
+    windowHeight = 690;
   }
   size(windowWidth, windowHeight, P3D);
   frameRate(60);
@@ -156,7 +161,8 @@ void processJSONData(){
       drivetrainEnabled = statusData.optBoolean("drivetrainEnabled", drivetrainEnabled);
       headlightEnabled = statusData.optBoolean("headlightEnabled", headlightEnabled);
       adjustMySpeed = statusData.optBoolean("adjustMySpeed", adjustMySpeed);
-      gpsLock = statusData.optBoolean("gpsLock", gpsLock); 
+      gpsLock = statusData.optBoolean("gpsLock", gpsLock);
+      loopNumber = statusData.optInt("loopNumber", loopNumber);
     JSONObject sensorsData = jsonData.optJSONObject("sensors");
       rangefinderValue = sensorsData.optDouble("rangefinder", rangefinderValue);
       leftBumper = sensorsData.optBoolean("leftBumper", leftBumper);
@@ -211,7 +217,7 @@ void processJSONData(){
     goalLocation = new LatLonPt(goalLat, goalLon, defaultPointSize);
     goalXY = new XYPt(goalLocation);
     guiGoalLat.setValue((float) goalLocation.getLat());
-    guiGoalLat.setValue((float) goalLocation.getLon());
+    guiGoalLon.setValue((float) goalLocation.getLon());
     guiDistanceToGoal.setValue((float) distanceToGoal);
     // Headings
     guiCurrentHeading.setStartAngle(radians((float)currentHeading-90));
@@ -225,6 +231,7 @@ void processJSONData(){
     guiESC.setValue(adjustedSpeedValue);
     // IMU 6dof
     // Debug Info
+    guiLoopNumber.setValue(loopNumber);
   }
 }
 
@@ -403,6 +410,13 @@ void guiSetup(){
     .setSliderMode(Slider.FLEXIBLE)
     ;
     
+  guiCopyPosition = cp5.addButton("copyPosition")
+    .setPosition(40, 350)
+    .setValue(0)
+    .setCaptionLabel("Copy Position")
+    .setSize(105,20)
+    ;
+    
 
   guiCurrentHeading = cp5.addKnob("Heading")
     .setRange(0,1)
@@ -505,6 +519,16 @@ void guiSetup(){
     .setLock(true)
     .setVisible(debugVisible)
     ;
+  
+  guiLoopNumber = cp5.addNumberbox("Loop Number")
+    .setPosition(180, 77)
+    .setSize(75,20)
+    .setDecimalPrecision(3)
+    .setColorBackground(color(35))
+    .setColorForeground(color(160))
+    .setLock(true)
+    .setVisible(debugVisible)
+    ;
 }
 
 void guiUpdate(){
@@ -513,6 +537,7 @@ void guiUpdate(){
   guiServo.setVisible(debugVisible);
   guiRangefinder.setVisible(debugVisible);
   guiDriveBattery.setVisible(debugVisible);
+  guiLoopNumber.setVisible(debugVisible);
 }
 
 void guiLatLon(Numberbox theNumberbox){
@@ -531,4 +556,8 @@ void deactivateToggle(Toggle theToggle){
     .setColorActive(color(200))
     .setLock(true)
     ;
+}
+
+public void copyPosition(int buttonValue){
+  clippy.copyString(currentLocation.toString() + ", 3.0,\r\n");
 }

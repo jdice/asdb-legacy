@@ -82,8 +82,8 @@ public class XYPt{
 	}
 	
 	public String toString(){
-		//String data = (new Double(this.getX())).toString() + "," + (new Double(this.getY())).toString();
-		String data = xyPosFormat.format(this.getX()) + "," + xyPosFormat.format(this.getY());
+		//String data = (new Double(this.getX())).toString() + ", " + (new Double(this.getY())).toString();
+		String data = xyPosFormat.format(this.getX()) + ", " + xyPosFormat.format(this.getY());
 		return data;
 	}
 	

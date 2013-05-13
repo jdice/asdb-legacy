@@ -5,9 +5,8 @@
 #include <FreeSixIMU.h>
 #include <FIMU_ADXL345.h>  
 #include <FIMU_ITG3200.h>
-#define PMTK_SET_NMEA_UPDATE_10HZ "$PMTK220,100*2F"
-#define PMTK_SET_NMEA_OUTPUT_RMCONLY "$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29"
 
+int loopNumber = 0;
 double goalSpeed = 6.5; //miles per hour
 double speedTolerance = 0.5; // +/- miles per hour
 const boolean jsonPrint = true;
@@ -19,12 +18,13 @@ boolean brakeMode = false;
 const unsigned long brakeDuration = 1600;
 TinyGPS gps;
 PWMServo speedControl;
-float currentLat, currentLon, goalLat, goalLon, currentHeading, goalHeading, initialLat, initialLon, distanceToGoal;
-const int lockLED =  13; 
+float currentLat, currentLon, goalLat, goalLon;
+float currentHeading, currentGPSHeading, lastKnownGoodGPSHeading, imuYawStandard, imuHeading, goalHeading, adjustedGoalHeading;
+float initialLat, initialLon, distanceToGoal;
+float imuHistory[20];
+float imuHistoryAverage, imuHistoryStdev;
+const int lockLED =  13;
 unsigned long timer100, timer500, brakeTimer;
-void gpsdump(TinyGPS &gps);
-boolean feedgps();
-unsigned long timestarted; //------------------------------------------------
 int pointid = 0;
 char waypointBehavior = 'l'; // r means reverse at end of goalpoints, l means loop through goalpoints, s means stop at final goalpoint
 boolean waypointDirection = true; // true means traverse waypoints in order, false reverses the order, this is managed by the car
@@ -35,6 +35,31 @@ double maxSpeed;
 char* debugInfo;
 aJsonStream serial_stream(&Serial3);
 
+//goal points
+// Jewell Track calibrated with new GPS at 2013-05-05 at 6:40pm
+/*float goal[] = {
+39.24795, -94.41036, 3.0,
+39.24744, -94.41039, 3.0,
+39.24744, -94.41039, 3.0,
+39.24707, -94.41041, 3.0,
+39.24682, -94.41027, 3.0,
+39.24673, -94.40999, 3.0,
+39.24676, -94.40972, 3.0,
+39.24691, -94.40950, 3.0,
+39.24738, -94.40944, 3.0,
+39.24789, -94.40943, 3.0,
+39.24812, -94.40962, 3.0,
+39.24818, -94.40981, 3.0,
+39.24814, -94.41015, 3.0};*/
+
+//Jewell center of field with right angles
+float goal[] = {
+39.24737, -94.41014, 3.0,
+39.24720, -94.41017, 3.0,
+39.24720, -94.40987, 3.0,
+39.24736, -94.40986, 3.0};
+
+
 //steering
 boolean steeringEnabled = true;
 PWMServo steeringServo;
@@ -42,7 +67,8 @@ const int centerSteeringTuningValue = 90; // lower means more right, higher mean
 const int fullRightSteeringTuningValue = 58;
 const int fullLeftSteeringTuningValue = 116;
 int steeringAngle = centerSteeringTuningValue;
-float turnAngle;
+float turnAngle = 0;
+float derivativeTuning = 0.9;
 
 //bumpers
 boolean leftBumper, rightBumper;
@@ -65,6 +91,8 @@ boolean stopOverrides = false;
 
 //imu gyro
 float imuEulerAngles[3];
+float imuValues[6];
+float imuAngularTrust = 5; // in degrees per second
 FreeSixIMU imuSixDOF = FreeSixIMU();
 
 //drive battery monitor
@@ -74,10 +102,8 @@ float driveBatteryVoltage = 0;
 
 void setup()
 {
+  Serial2.begin(115200);
   Serial3.begin(57600);
-  Serial2.begin(9600);
-  Serial2.println(PMTK_SET_NMEA_OUTPUT_RMCONLY);
-  Serial2.println(PMTK_SET_NMEA_UPDATE_10HZ);
   Wire.begin();
   imuSixDOF.init();
   debugInfo = "asdb is running.";
@@ -99,6 +125,7 @@ aJsonObject *createMessage()
       aJson.addBoolToObject(myStatus, "headlightEnabled", headlightEnabled);
       aJson.addBoolToObject(myStatus, "adjustMySpeed", adjustMySpeed);
       aJson.addBoolToObject(myStatus, "gpsLock", gpsLock);
+      aJson.addNumberToObject(myStatus, "loopNumber", loopNumber);
     aJson.addItemToObject(msg, "status", myStatus);
     aJsonObject *mySensors = aJson.createObject();
       aJson.addNumberToObject(mySensors, "rangefinder", rangefinderValue);
@@ -118,7 +145,9 @@ aJsonObject *createMessage()
       aJson.addItemToObject(myLocation, "goal", myLocationGoal);
       aJsonObject *myLocationHeading = aJson.createObject();
         aJson.addNumberToObject(myLocationHeading, "current", currentHeading);
+        aJson.addNumberToObject(myLocationHeading, "lastGPS", lastKnownGoodGPSHeading); 
         aJson.addNumberToObject(myLocationHeading, "goal", goalHeading);
+        aJson.addNumberToObject(myLocationHeading, "adjustedGoal", adjustedGoalHeading);
         aJson.addNumberToObject(myLocationHeading, "turnAngle", turnAngle);
         aJson.addNumberToObject(myLocationHeading, "steeringAngle", steeringAngle);
       aJson.addItemToObject(myLocation, "heading", myLocationHeading);
@@ -131,6 +160,10 @@ aJsonObject *createMessage()
     aJson.addItemToObject(msg, "location", myLocation);
     aJsonObject *myIMU = aJson.createObject();
       aJson.addNumberToObject(myIMU, "yaw", imuEulerAngles[0]);
+      aJson.addNumberToObject(myIMU, "yawstandard", imuYawStandard);
+      aJson.addNumberToObject(myIMU, "imuHeading", imuHeading);
+      aJson.addNumberToObject(myIMU, "imuHistoryAverage", imuHistoryAverage);
+      aJson.addNumberToObject(myIMU, "imuHistoryStdev", imuHistoryStdev);
       aJson.addNumberToObject(myIMU, "pitch", imuEulerAngles[1]);
       aJson.addNumberToObject(myIMU, "roll", imuEulerAngles[2]);
       //aJson.addNumberToObject(myIMU, "accX", imuAccX);
@@ -144,14 +177,30 @@ aJsonObject *createMessage()
 float getTurnAngle(float goalHeading, float currentHeading){
   float turnAngle;
   turnAngle = goalHeading - currentHeading;
-  if(turnAngle > 180){
-    turnAngle -= 360;
-  }else if(turnAngle < -180){
-    turnAngle += 360;
-  }
+  turnAngle = getCoterminalAngle(turnAngle);
   return turnAngle;
 }
 
+float adjustGoalHeading(){
+  adjustedGoalHeading += derivativeTuning*getTurnAngle(goalHeading,adjustedGoalHeading);
+  while(adjustedGoalHeading >= 360){
+    adjustedGoalHeading -= 360;
+  }
+  while(adjustedGoalHeading < 0){
+    adjustedGoalHeading += 360;
+  }
+}
+
+float getCoterminalAngle(float angle){
+  float coterminalAngle = angle;
+  while(coterminalAngle > 180){
+    coterminalAngle -= 360;
+  }
+  while(coterminalAngle < -180){
+    coterminalAngle += 360;
+  }
+  return coterminalAngle;
+}
 
 
 void gpsdump(TinyGPS &gps){
@@ -162,93 +211,7 @@ void gpsdump(TinyGPS &gps){
   byte month, day, hour, minute, second, hundredths;
   unsigned short sentences, failed;
   unsigned long heading;  
-
-  feedgps(); // If we don't feed the gps during this long routine, we may drop characters and get checksum errors
-
-  gps.f_get_position(&flat, &flon, &age);
-  currentLat = flat;
-  currentLon = flon;
-
-// Jewell Track with cutout at stands towards 50 line of field
-//float goal[] = {39.24695, -94.41040, 3.0, 39.24676, -94.41022, 3.0, 39.24670, -94.40990, 3.0, 39.24679, -94.40964, 3.0, 39.24696, -94.40945, 3.0, 39.24748, -94.40943, 3.0, 39.24791, -94.40943, 3.0, 39.24804, -94.40952, 3.0, 39.24813, -94.40968, 3.0, 39.24820, -94.40990, 3.0, 39.24809, -94.41022, 3.0, 39.24775, -94.41030, 3.0, 39.24743, -94.41020, 3.0};
-
-//Jewell Track replaced 2013-04-25
-/*float goal[] = {
-39.24736, -94.41043, 3.0,
-39.24704, -94.41045, 3.0,
-39.24680, -94.41031, 3.0,
-39.24669, -94.41001, 3.0,
-39.24674, -94.40968, 3.0,
-39.24697, -94.40943, 3.0,
-39.24742, -94.40943, 3.0,
-39.24786, -94.40943, 3.0,
-39.24808, -94.40961, 3.0,
-39.24819, -94.40981, 3.0,
-39.24810, -94.41021, 3.0,
-39.24793, -94.41038, 3.0,
-39.24752, -94.41044, 3.0};*/
-
-//Jewell Track 2013-04-25, recorded at 3pm
-float goal[] = {
-39.24742, -94.41036, 3.0,
-39.24710, -94.41037, 3.0,
-39.24687, -94.41032, 3.0,
-39.24673, -94.40995, 3.0,
-39.24685, -94.40956, 3.0,
-39.24704, -94.40944, 3.0,
-39.24740, -94.40939, 3.0,
-39.24784, -94.40939, 3.0,
-39.24815, -94.40960, 3.0,
-39.24823, -94.40980, 3.0,
-39.24810, -94.41024, 3.0,
-39.24792, -94.41037, 3.0,
-39.24758, -94.41037, 3.0};
-
-//Jewell Track triangle in the south end of the field
-/*float goal[] = {
-39.24735, -94.4104, 3.0,
-39.24736, -94.41017, 3.0,
-39.24735, -94.40979, 3.0};*/
-
-
-/* old Jewell Track replaced 2013-03-29
-float goal[] = {
-39.24697, -94.41041, 3.0,
-39.24676, -94.41022, 3.0,
-39.24670, -94.40990, 3.0,
-39.24679, -94.40964, 3.0,
-39.24696, -94.40945, 3.0,
-39.24748, -94.40943, 3.0,
-39.24791, -94.40943, 3.0,
-39.24804, -94.40952, 3.0, 
-39.24813, -94.40968, 3.0, 
-39.24820, -94.40990, 3.0, 
-39.24809, -94.41021, 3.0, 
-39.24785, -94.41038, 3.0, 
-39.24740, -94.41041, 3.0};
-*/
-// old Jewell Track
-// float goal[] = {39.24695, -94.41040, 3.0, 39.24676, -94.41022, 3.0, 39.24670, -94.40990, 3.0, 39.24679, -94.40964, 3.0, 39.24696, -94.40945, 3.0, 39.24748, -94.40943, 3.0, 39.24791, -94.40943, 3.0, 39.24804, -94.40952, 3.0, 39.24813, -94.40968, 3.0, 39.24820, -94.40990, 3.0, 39.24809, -94.41022, 3.0, 39.24785, -94.41040, 3.0, 39.24740, -94.41040, 3.0};
-
-// old Jewell Track
-// float goal[] = {39.24695, -94.41040, 3.0,39.24676, -94.41022, 3.0,39.24670, -94.40990, 3.0,39.24678, -94.40962, 3.0,39.24695, -94.40945, 3.0,39.24785, -94.40941, 3.0,39.24809, -94.40968, 3.0,39.24820, -94.40990, 3.0,39.24809, -94.41022, 3.0,39.24785, -94.41040, 3.0};
-
-// old Jewell Track
-// float goal[] = {39.24695, -94.41038, 5.0, 39.24678, -94.41020, 5.0, 39.24671, -94.40990, 5.0, 39.24678, -94.40962, 5.0, 39.24695, -94.40944, 5.0, 39.24785, -94.40940, 5.0, 39.24809, -94.40955, 5.0, 39.24818, -94.40990, 5.0, 39.24809, -94.41022, 5.0, 39.24785, -94.41038, 5.0}; // lat1, lon1, accuracy1, lat2, lon2, accuracy2, etc.
-
-// Two random points at Jewell field, diagonal across the field are 39.24727, -94.41008, 5.0, 39.24765, -94.40979
-
-// Center of Jewell field is 39.24745, -94.40990
-
-// South half of arc 39.24695, -94.41038, 5.0, 39.24678, -94.41020, 5.0, 39.24671, -94.40990, 5.0, 39.24678, -94.40962, 5.0, 39.24695, -94.40944, 5.0, 
-  speed = gps.speed();
-  currentSpeed = ((double) speed) * 0.011;
-  heading = gps.course();
-  currentHeading = heading/100;
-  goalLat = goal[pointid];
-  goalLon = goal[pointid+1];
-  goalHeading = gps.course_to(currentLat, currentLon, goalLat, goalLon);
-  turnAngle = getTurnAngle(goalHeading, currentHeading);
+  
   if(initialLat==0){
     initialLat = flat;
   }
@@ -256,6 +219,42 @@ float goal[] = {
     initialLon = flon;
   }
   
+  gps.f_get_position(&flat, &flon, &age);
+  currentLat = flat;
+  currentLon = flon;
+  speed = gps.speed();
+  currentSpeed = ((double) speed) * 0.011;
+  heading = gps.course();
+  currentGPSHeading = heading/100;
+  
+  if(abs(imuValues[3])>imuAngularTrust){ // if our yaw angular rate is greater than we trust
+    if(lastKnownGoodGPSHeading == -1){
+      lastKnownGoodGPSHeading = currentGPSHeading;
+      imuYawStandard = imuEulerAngles[0];
+      imuHeading = imuEulerAngles[0]-imuYawStandard;
+      currentHeading = currentGPSHeading;
+    }else{
+      imuHeading = imuEulerAngles[0]-imuYawStandard;
+      currentHeading = lastKnownGoodGPSHeading + imuHeading;
+    }
+  }else{
+    lastKnownGoodGPSHeading = -1;
+    currentHeading = currentGPSHeading;
+    imuYawStandard = imuEulerAngles[0];
+    imuHeading = imuEulerAngles[0]-imuYawStandard;
+  }
+  while(currentHeading > 360){
+    currentHeading -= 360;
+  }
+  while(currentHeading < 0){
+    currentHeading += 360;
+  }
+  
+  goalLat = goal[pointid];
+  goalLon = goal[pointid+1];
+  goalHeading = gps.course_to(currentLat, currentLon, goalLat, goalLon);
+  adjustGoalHeading();
+  turnAngle = getTurnAngle(adjustedGoalHeading, currentHeading);
   if(turnAngle <= 0){
     steeringAngle = map(turnAngle, -180, 0, fullLeftSteeringTuningValue, centerSteeringTuningValue);
   }else{
@@ -299,7 +298,6 @@ float goal[] = {
       }
     }
   }
-  feedgps();
 }
 
 
@@ -352,13 +350,31 @@ void readSensors(){
   
   // IMU 6dof
   imuSixDOF.getEuler(imuEulerAngles);
+  imuSixDOF.getValues(imuValues);
+  /*for(int i=0; i<19; i++){
+    imuHistory[i+i] = imuHistory[i];
+  }
+  imuHistory[0] = imuValues[3];
+  imuHistoryAverage = 0;
+  for(int i=0; i<20; i++){
+    imuHistoryAverage += imuHistory[i];
+  }
+  imuHistoryAverage /= 20;
+  imuHistoryStdev = 0;
+  for(int i=0; i<20; i++){
+    imuHistoryStdev += sq(getCoterminalAngle(imuHistory[i]-imuHistoryAverage));
+  }
+  imuHistoryStdev = sqrt(imuHistoryStdev/19);*/
+  
   
   // Drive Battery Monitor
   driveBatteryVoltage = analogRead(driveBatteryMonitorPin) * 0.00418 * driveBatteryVoltageRatio;
 }
+
 void loop()
 {
-  ////////////////////////////////////////////////////////////////////////////////////////
+  loopNumber++;
+  // Read from Xbee
   while(Serial3.available()){  //is there anything to read?
     char getData = Serial3.read();  //if yes, read it
     if(getData == 'q'){
@@ -373,9 +389,8 @@ void loop()
       stopOverrides = !stopOverrides;
     }
   }
-//////////////////////////////////////////////////////////////////////////////////////
-  boolean newdata = false;
-  unsigned long start = millis();
+
+  // Update sensor readings
   readSensors();
   
   //stop criteria
@@ -401,12 +416,6 @@ void loop()
     }
   }
   
-  if(headlightEnabled){
-    digitalWrite(headlightPin, HIGH);
-  }else{
-    digitalWrite(headlightPin, LOW);
-  }
-  
   if(drivetrainEnabled){
     adjustedSpeedValue = speedValue;
     if(adjustMySpeed == false){
@@ -430,25 +439,33 @@ void loop()
   }
   
   speedControl.write(adjustedSpeedValue);
+  if(steeringEnabled){
+      steeringServo.write(steeringAngle);
+  }
   
-  while (millis() - start < 100)
-  {
+  if (feedgps()){
+    digitalWrite(lockLED, HIGH);
+    gpsLock = true;
+    gpsdump(gps);
+  }else{
+    digitalWrite(lockLED, LOW);
+    gpsLock = false;
+  }
+  
+  if(millis() - timer100 > 100){
+    // Update max speed
     if(currentSpeed > maxSpeed){
       maxSpeed = currentSpeed;
     }
-    if (feedgps())
-      newdata = true;
-      
-  }
-  if(millis() - timer100 > 100){
-    timer100 = millis();
-    if(steeringEnabled){
-      steeringServo.write(steeringAngle);
+    
+    // Update headlight
+    if(headlightEnabled){
+      digitalWrite(headlightPin, HIGH);
+    }else{
+      digitalWrite(headlightPin, LOW);
     }
-  }
-  
-  if(millis() - timer500 > 500){
-    adjustSpeed();
+    
+    // Send JSON data
     if(jsonPrint){
       aJsonObject *msg = createMessage();
       aJson.print(msg, &serial_stream);
@@ -456,15 +473,12 @@ void loop()
       Serial3.println();
       aJson.deleteItem(msg);
     }
-    timer500 = millis();
+    loopNumber = 0;
+    timer100 = millis();
   }
   
-  if (newdata){
-    digitalWrite(lockLED, HIGH);
-    gpsLock = true;
-    gpsdump(gps);
-  }else{
-    digitalWrite(lockLED, LOW);
-    gpsLock = false;
+  if(millis() - timer500 > 500){
+    adjustSpeed();
+    timer500 = millis();
   }
 }

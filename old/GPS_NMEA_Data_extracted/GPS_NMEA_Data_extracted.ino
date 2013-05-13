@@ -1,10 +1,10 @@
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
 #include <TinyGPS.h>
-#define PMTK_SET_NMEA_UPDATE_1HZ  "$PMTK220,1000*1F"
-#define PMTK_SET_NMEA_UPDATE_5HZ  "$PMTK220,200*2C"
-#define PMTK_SET_NMEA_UPDATE_10HZ "$PMTK220,100*2F"
-#define PMTK_SET_NMEA_OUTPUT_RMCONLY "$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29"
-#define PMTK_SET_NMEA_OUTPUT_ALLDATA "$PMTK314,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0*28"
+//#define PMTK_SET_NMEA_UPDATE_1HZ  "$PMTK220,1000*1F"
+//#define PMTK_SET_NMEA_UPDATE_5HZ  "$PMTK220,200*2C"
+//#define PMTK_SET_NMEA_UPDATE_10HZ "$PMTK220,100*2F"
+//#define PMTK_SET_NMEA_OUTPUT_RMCONLY "$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29"
+//#define PMTK_SET_NMEA_OUTPUT_ALLDATA "$PMTK314,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0*28"
 
 
 /* This sample code demonstrates the normal use of a TinyGPS object.
@@ -13,7 +13,8 @@
 */
 
 TinyGPS gps;
-SoftwareSerial mySerial(2, 3);
+//SoftwareSerial mySerial(2, 3);
+
 float myLat, myLon;
 float initialLat = 0;
 float initialLon = 0;
@@ -25,9 +26,10 @@ void printFloat(double f, int digits = 2);
 void setup()
 {
   Serial.begin(115200);
-  mySerial.begin(9600);
-  mySerial.println(PMTK_SET_NMEA_OUTPUT_RMCONLY);
-  mySerial.println(PMTK_SET_NMEA_UPDATE_10HZ);
+  Serial2.begin(115200);
+//  mySerial.begin(9600);
+//  mySerial.println(PMTK_SET_NMEA_OUTPUT_RMCONLY);
+//  mySerial.println(PMTK_SET_NMEA_UPDATE_10HZ);
   Serial.print("Yo, starting up.");    
 
 }
@@ -120,9 +122,9 @@ void gpsdump(TinyGPS &gps)
   
 boolean feedgps()
 {
-  while (mySerial.available())
+  while (Serial2.available())
   {
-    if (gps.encode(mySerial.read()))
+    if (gps.encode(Serial2.read()))
       return true;
   }
   return false;

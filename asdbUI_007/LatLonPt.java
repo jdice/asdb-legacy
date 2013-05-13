@@ -72,8 +72,8 @@ public class LatLonPt{
 	}
 	
 	public String toString(){
-		//String data = (new Double(this.getLat())).toString() + "," + (new Double(this.getLon())).toString();
-		String data = decimalDegreeFormat.format(this.getLat()) + "," + decimalDegreeFormat.format(this.getLon());
+		//String data = (new Double(this.getLat())).toString() + ", " + (new Double(this.getLon())).toString();
+		String data = decimalDegreeFormat.format(this.getLat()) + ", " + decimalDegreeFormat.format(this.getLon());
 		return data;
 	}
 	
