@@ -21,8 +21,12 @@ PWMServo speedControl;
 float currentLat, currentLon, goalLat, goalLon;
 float currentHeading, currentGPSHeading, lastKnownGoodGPSHeading, imuYawStandard, imuHeading, goalHeading, adjustedGoalHeading;
 float initialLat, initialLon, distanceToGoal;
-float imuHistory[20];
+const int imuHistorySize = 160;
+float imuHistory[imuHistorySize];
 float imuHistoryAverage, imuHistoryStdev;
+const int gpsHeadingHistorySize = 50;
+float gpsHeadingHistory[gpsHeadingHistorySize];
+float gpsHeadingHistoryAverage, gpsHeadingHistoryStdev;
 const int lockLED =  13;
 unsigned long timer100, timer500, brakeTimer;
 int pointid = 0;
@@ -36,21 +40,33 @@ char* debugInfo;
 aJsonStream serial_stream(&Serial3);
 
 //goal points
-// Jewell Track calibrated with new GPS at 2013-05-05 at 6:40pm
+// Jewell Track Center Line calibrated with new GPS at 2013-05-19 at 3:41pm
 /*float goal[] = {
-39.24795, -94.41036, 3.0,
-39.24744, -94.41039, 3.0,
-39.24744, -94.41039, 3.0,
-39.24707, -94.41041, 3.0,
-39.24682, -94.41027, 3.0,
-39.24673, -94.40999, 3.0,
-39.24676, -94.40972, 3.0,
+39.24736, -94.41039, 3.0,
+39.24730, -94.41040, 3.0,
+39.24722, -94.41041, 3.0,
+39.24712, -94.41040, 3.0,
+39.24698, -94.41037, 3.0,
+39.24685, -94.41030, 3.0,
+39.24673, -94.41006, 3.0,
+39.24671, -94.40988, 3.0,
+39.24673, -94.40971, 3.0,
+39.24681, -94.40960, 3.0,
 39.24691, -94.40950, 3.0,
-39.24738, -94.40944, 3.0,
-39.24789, -94.40943, 3.0,
-39.24812, -94.40962, 3.0,
-39.24818, -94.40981, 3.0,
-39.24814, -94.41015, 3.0};*/
+39.24708, -94.40944, 3.0,
+39.24719, -94.40944, 3.0,
+39.24733, -94.40943, 3.0,
+39.24750, -94.40943, 3.0,
+39.24777, -94.40942, 3.0,
+39.24791, -94.40944, 3.0,
+39.24807, -94.40955, 3.0,
+39.24817, -94.40973, 3.0,
+39.24818, -94.40980, 3.0,
+39.24816, -94.41002, 3.0,
+39.24804, -94.41029, 3.0,
+39.24780, -94.41040, 3.0,
+39.24755, -94.41040, 3.0};*/
+
 
 //Jewell center of field with right angles
 float goal[] = {
@@ -68,7 +84,7 @@ const int fullRightSteeringTuningValue = 58;
 const int fullLeftSteeringTuningValue = 116;
 int steeringAngle = centerSteeringTuningValue;
 float turnAngle = 0;
-float derivativeTuning = 0.9;
+const float derivativeTuning = 0.9;
 
 //bumpers
 boolean leftBumper, rightBumper;
@@ -92,7 +108,7 @@ boolean stopOverrides = false;
 //imu gyro
 float imuEulerAngles[3];
 float imuValues[6];
-float imuAngularTrust = 5; // in degrees per second
+const float imuAngularTrust = 5; // in degrees per second
 FreeSixIMU imuSixDOF = FreeSixIMU();
 
 //drive battery monitor
@@ -112,6 +128,12 @@ void setup()
   pinMode(lockLED, OUTPUT);
   pinMode(leftBumperPin, INPUT);
   pinMode(rightBumperPin, INPUT);
+  for(int i = 0; i<imuHistorySize; i++){
+    imuHistory[i] = 0.0f;
+  }
+  for(int i = 0; i<gpsHeadingHistorySize; i++){
+    gpsHeadingHistory[i] = 0.0f;
+  }
 }
 
 aJsonObject *createMessage()
@@ -145,7 +167,8 @@ aJsonObject *createMessage()
       aJson.addItemToObject(myLocation, "goal", myLocationGoal);
       aJsonObject *myLocationHeading = aJson.createObject();
         aJson.addNumberToObject(myLocationHeading, "current", currentHeading);
-        aJson.addNumberToObject(myLocationHeading, "lastGPS", lastKnownGoodGPSHeading); 
+        aJson.addNumberToObject(myLocationHeading, "lastGPS", lastKnownGoodGPSHeading);
+        aJson.addNumberToObject(myLocationHeading, "gpsHeadingHistoryStdev", gpsHeadingHistoryStdev);
         aJson.addNumberToObject(myLocationHeading, "goal", goalHeading);
         aJson.addNumberToObject(myLocationHeading, "adjustedGoal", adjustedGoalHeading);
         aJson.addNumberToObject(myLocationHeading, "turnAngle", turnAngle);
@@ -227,22 +250,32 @@ void gpsdump(TinyGPS &gps){
   heading = gps.course();
   currentGPSHeading = heading/100;
   
-  if(abs(imuValues[3])>imuAngularTrust){ // if our yaw angular rate is greater than we trust
-    if(lastKnownGoodGPSHeading == -1){
-      lastKnownGoodGPSHeading = currentGPSHeading;
-      imuYawStandard = imuEulerAngles[0];
-      imuHeading = imuEulerAngles[0]-imuYawStandard;
-      currentHeading = currentGPSHeading;
-    }else{
-      imuHeading = imuEulerAngles[0]-imuYawStandard;
-      currentHeading = lastKnownGoodGPSHeading + imuHeading;
-    }
-  }else{
-    lastKnownGoodGPSHeading = -1;
-    currentHeading = currentGPSHeading;
+  for(int i=0; i<(gpsHeadingHistorySize-1); i++){
+    gpsHeadingHistory[i+1] = gpsHeadingHistory[i];
+  }
+  gpsHeadingHistory[0] = currentGPSHeading;
+  gpsHeadingHistoryAverage = 0;
+  for(int i=0; i<gpsHeadingHistorySize; i++){
+    gpsHeadingHistoryAverage += gpsHeadingHistory[i];
+  }
+  gpsHeadingHistoryAverage /= gpsHeadingHistorySize;
+  gpsHeadingHistoryStdev = 0;
+  for(int i=0; i<gpsHeadingHistorySize; i++){
+    gpsHeadingHistoryStdev += sq(getCoterminalAngle(gpsHeadingHistory[i]-gpsHeadingHistoryAverage));
+  }
+  gpsHeadingHistoryStdev = sqrt(gpsHeadingHistoryStdev/(gpsHeadingHistorySize-1));
+  
+  if((currentSpeed > 1) && (imuHistoryStdev > 0) && (imuHistoryStdev < 2) && (abs(imuValues[3])<imuAngularTrust)){
+    lastKnownGoodGPSHeading = currentGPSHeading;
     imuYawStandard = imuEulerAngles[0];
     imuHeading = imuEulerAngles[0]-imuYawStandard;
+    currentHeading = currentGPSHeading;
+  }else{
+    imuHeading = imuEulerAngles[0]-imuYawStandard;
+    //currentHeading = lastKnownGoodGPSHeading + imuHeading;
+    currentHeading = currentGPSHeading;
   }
+  
   while(currentHeading > 360){
     currentHeading -= 360;
   }
@@ -351,21 +384,22 @@ void readSensors(){
   // IMU 6dof
   imuSixDOF.getEuler(imuEulerAngles);
   imuSixDOF.getValues(imuValues);
-  /*for(int i=0; i<19; i++){
-    imuHistory[i+i] = imuHistory[i];
+  if(loopNumber%5==0){
+    for(int i=0; i<(imuHistorySize-1); i++){
+      imuHistory[i+1] = imuHistory[i];
+    }
+    imuHistory[0] = imuValues[3];
+    imuHistoryAverage = 0;
+    for(int i=0; i<imuHistorySize; i++){
+      imuHistoryAverage += imuHistory[i];
+    }
+    imuHistoryAverage /= imuHistorySize;
+    imuHistoryStdev = 0;
+    for(int i=0; i<imuHistorySize; i++){
+      imuHistoryStdev += sq(getCoterminalAngle(imuHistory[i]-imuHistoryAverage));
+    }
+    imuHistoryStdev = sqrt(imuHistoryStdev/(imuHistorySize-1));
   }
-  imuHistory[0] = imuValues[3];
-  imuHistoryAverage = 0;
-  for(int i=0; i<20; i++){
-    imuHistoryAverage += imuHistory[i];
-  }
-  imuHistoryAverage /= 20;
-  imuHistoryStdev = 0;
-  for(int i=0; i<20; i++){
-    imuHistoryStdev += sq(getCoterminalAngle(imuHistory[i]-imuHistoryAverage));
-  }
-  imuHistoryStdev = sqrt(imuHistoryStdev/19);*/
-  
   
   // Drive Battery Monitor
   driveBatteryVoltage = analogRead(driveBatteryMonitorPin) * 0.00418 * driveBatteryVoltageRatio;
