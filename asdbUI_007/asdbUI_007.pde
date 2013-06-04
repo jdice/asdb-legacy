@@ -47,7 +47,7 @@ int maxGoalSpeed = 15;
 // controlP5 objects
 ControlP5 cp5;
 float testTheta = 0;
-Numberbox guiCurrentLat, guiCurrentLon, guiGoalLat, guiGoalLon, guiMouseLat, guiMouseLon, guiServo, guiESC, guiRangefinder, guiDriveBattery, guiLoopNumber, guiImuHistoryStdev, guiGpsHeadingHistoryStdev, guiCurrentSpeed, guiMaxSpeed, guiDistanceToGoal;
+Numberbox guiCurrentLat, guiCurrentLon, guiGoalLat, guiGoalLon, guiMouseLat, guiMouseLon, guiServo, guiESC, guiRangefinder, guiDriveBattery, guiLoopNumber, guiCurrentSpeed, guiMaxSpeed, guiDistanceToGoal;
 Toggle guiDrivetrain, guiSteering, guiHeadlight, guiGPSLock, guiFollowMouse, guiLeftBumper, guiRightBumper, guiManualAutomatic, guiDebugVisible;
 Button guiCopyPosition;
 DropdownList guiWaypointBehavior;
@@ -60,9 +60,9 @@ int loopNumber = 0; //myStatus
 double rangefinderValue = 0, driveBatteryVoltage = 0; //mySensors
 boolean leftBumper = false, rightBumper = false; //mySensors
 double currentLat = 39.24745, currentLon = -94.40990, goalLat = 39.24745, goalLon = -94.40990, distanceToGoal = 0; //myLocation
-double currentHeading = 0, gpsHeadingHistoryStdev = 0, goalHeading = 0, turnAngle = 0, currentSpeed = 0, goalSpeed = 0, maxSpeed = 0; //mySpeed
+double currentHeading = 0, goalHeading = 0, turnAngle = 0, currentSpeed = 0, goalSpeed = 0, maxSpeed = 0; //mySpeed
 int steeringAngle = 0, adjustedSpeedValue = 0; // steering and esc values
-double imuYaw = 0, imuPitch = 0, imuRoll = 0, imuHistoryStdev = 0; //myImu
+double imuYaw = 0, imuPitch = 0, imuRoll = 0; //myImu
 
 boolean jsonError = true;
 
@@ -87,8 +87,8 @@ void setup(){
     myPort.bufferUntil('~');
   }
   int mapImgSize = 2000;
-  double mapCenterLat = 39.247440;
-  double mapCenterLon = -94.409921;
+  double mapCenterLat = 39.24630;
+  double mapCenterLon = -94.40987;
   int zoomLevel = 20;
   String mapType = GoogleMapper.MAPTYPE_HYBRID;
   int mapWidth = mapImgSize;
@@ -96,7 +96,7 @@ void setup(){
   gMapper = new GoogleMapper(mapCenterLat,mapCenterLon,zoomLevel,mapType,mapWidth,mapHeight);
   LatLonPt.setMapper(gMapper);
   XYPt.setMapper(gMapper);
-  mapImg = loadImage("data/map.jpg");
+  mapImg = loadImage("data/map2.jpg");
   cameraHeight = (windowHeight/2.0) / tan(PI/6);
   
   guiSetup();
@@ -178,7 +178,6 @@ void processJSONData(){
         distanceToGoal = goalLocationData.optDouble("distanceToGoal", distanceToGoal);
       JSONObject headingLocationData = locationData.optJSONObject("heading");
         currentHeading = headingLocationData.optDouble("current", currentHeading);
-        gpsHeadingHistoryStdev = headingLocationData.optDouble("gpsHeadingHistoryStdev", gpsHeadingHistoryStdev);
         goalHeading = headingLocationData.optDouble("goal", goalHeading);
         turnAngle = headingLocationData.optDouble("turnAngle", turnAngle);
         steeringAngle = headingLocationData.optInt("steeringAngle", steeringAngle);
@@ -191,7 +190,6 @@ void processJSONData(){
       imuYaw = imuData.optDouble("yaw", imuYaw);
       imuPitch = imuData.optDouble("pitch", imuPitch);
       imuRoll = imuData.optDouble("roll", imuRoll);
-      imuHistoryStdev = imuData.optDouble("imuHistoryStdev", imuHistoryStdev);
     debugInfo = jsonData.optString("debug","Failed to read data.");
     jsonError = false;
   }
@@ -231,9 +229,6 @@ void processJSONData(){
     guiGoalSpeed.setValue((float) goalSpeed);
     guiMaxSpeed.setValue((float) maxSpeed);
     guiESC.setValue(adjustedSpeedValue);
-    // IMU 6dof
-    guiImuHistoryStdev.setValue((float) imuHistoryStdev);
-    guiGpsHeadingHistoryStdev.setValue((float) gpsHeadingHistoryStdev);
     // Debug Info
     guiLoopNumber.setValue(loopNumber);
   }
@@ -534,7 +529,7 @@ void guiSetup(){
     .setVisible(debugVisible)
     ;
   
-  guiImuHistoryStdev = cp5.addNumberbox("imuStdev")
+/*  guiImuHistoryStdev = cp5.addNumberbox("imuStdev")
     .setPosition(260, 77)
     .setSize(75,20)   
     .setDecimalPrecision(3)
@@ -543,8 +538,8 @@ void guiSetup(){
     .setLock(true)
     .setVisible(debugVisible)
     ;
-    
-  guiGpsHeadingHistoryStdev = cp5.addNumberbox("GpsHeadingHistoryStdev")
+*/
+/*  guiGpsHeadingHistoryStdev = cp5.addNumberbox("GpsHeadingHistoryStdev")
     .setPosition(260, 113)
     .setSize(75,20)
     .setDecimalPrecision(3)
@@ -553,6 +548,7 @@ void guiSetup(){
     .setLock(true)
     .setVisible(debugVisible)
     ;
+*/
 }
 
 void guiUpdate(){
@@ -562,8 +558,8 @@ void guiUpdate(){
   guiRangefinder.setVisible(debugVisible);
   guiDriveBattery.setVisible(debugVisible);
   guiLoopNumber.setVisible(debugVisible);
-  guiImuHistoryStdev.setVisible(debugVisible);
-  guiGpsHeadingHistoryStdev.setVisible(debugVisible);
+  //guiImuHistoryStdev.setVisible(debugVisible);
+  //guiGpsHeadingHistoryStdev.setVisible(debugVisible);
 }
 
 void guiLatLon(Numberbox theNumberbox){
