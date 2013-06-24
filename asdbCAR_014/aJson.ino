@@ -7,6 +7,7 @@ aJsonObject *createMessage(){
       aJson.addBoolToObject(myStatus, "drivetrainEnabled", drivetrainEnabled);
       aJson.addBoolToObject(myStatus, "headlightEnabled", headlightEnabled);
       aJson.addBoolToObject(myStatus, "adjustMySpeed", adjustMySpeed);
+      aJson.addBoolToObject(myStatus, "buttonStop", buttonStop);
       aJson.addBoolToObject(myStatus, "gpsLock", gpsLock);
       aJson.addNumberToObject(myStatus, "loopNumber", loopNumber);
     aJson.addItemToObject(msg, "status", myStatus);

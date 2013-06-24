@@ -1,5 +1,5 @@
 void setup(){
-  Serial.begin(9600);
+//  Serial.begin(9600);
   Serial2.begin(115200); // GPS
   Serial3.begin(57600); // XBee
   Wire.begin();
@@ -13,4 +13,5 @@ void setup(){
   pinMode(lockLED, OUTPUT);
   pinMode(leftBumperPin, INPUT);
   pinMode(rightBumperPin, INPUT);
+  pinMode(startButtonPin, INPUT_PULLUP);
 }

@@ -9,10 +9,11 @@ import controlP5.*;
 // Application Settings
 boolean fullScreen = true;
 boolean doSerial = true;
+boolean debugVisible = false;
 boolean doTestPointMove = false;
 float defaultPointSize = 5.0;
 
-// Clipboard Setup
+// Clipboard Setup 
 ClipHelper clippy = new ClipHelper();
 
 // Make a Queue for history location data
@@ -34,7 +35,6 @@ LatLonPt currentLocation, goalLocation, mouseLocation;
 
 // Camera Setup
 boolean cameraFollowMouse = false;
-boolean debugVisible = false;
 float cameraHeight;
 double cameraMoveAmount = 100.0; // suit to taste
 PImage mapImg;
@@ -79,7 +79,7 @@ void setup(){
   frameRate(60);
   uiFont = loadFont("uiFont.vlw");
   if(doSerial){
-    String serialPort = "COM5"; //Serial.list()[0];
+    String serialPort = "COM4"; //Serial.list()[0];
     myPort = new Serial(this, serialPort, 57600);
     println("Connecting serial " + serialPort);
     delay(100);
@@ -87,8 +87,8 @@ void setup(){
     myPort.bufferUntil('~');
   }
   int mapImgSize = 2000;
-  double mapCenterLat = 39.24630;
-  double mapCenterLon = -94.40987;
+  double mapCenterLat = 40.07155;
+  double mapCenterLon = -105.22954;
   int zoomLevel = 20;
   String mapType = GoogleMapper.MAPTYPE_HYBRID;
   int mapWidth = mapImgSize;
@@ -96,7 +96,7 @@ void setup(){
   gMapper = new GoogleMapper(mapCenterLat,mapCenterLon,zoomLevel,mapType,mapWidth,mapHeight);
   LatLonPt.setMapper(gMapper);
   XYPt.setMapper(gMapper);
-  mapImg = loadImage("data/map2.jpg");
+  mapImg = loadImage("data/map3.jpg");
   cameraHeight = (windowHeight/2.0) / tan(PI/6);
   
   guiSetup();

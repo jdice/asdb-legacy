@@ -1,43 +1,47 @@
 #include <PWMServo.h>
 PWMServo esc;  // create servo object to control a servo 
 PWMServo steering;
-int steeringValue = 90;
-int slowSpeedValue = 80;
+int steeringValue = 76;
+int slowSpeedValue = 89;
+int reverseSpeedValue = 110;
 
 void setup() {
-  Serial3.begin(57600);    	//initialize serial
+  Serial.begin(57600);    	//initialize serial
   steering.attach(SERVO_PIN_A);
   esc.attach(SERVO_PIN_B); 	//set pin 13 as output
 }
 
 void loop() {
-  while(Serial3.available()){  //is there anything to read?
-    char getData = Serial3.read();  //if yes, read it
+  while(Serial.available()){  //is there anything to read?
+    char getData = Serial.read();  //if yes, read it
     if(getData == 'w'){
       esc.write(25);
-      Serial3.println("Fast!");
+      Serial.println("Fast!");
     }else if(getData == 's'){
       esc.write(100);
-      Serial3.println("Stop!");
+      Serial.println("Stop!");
     }else if(getData == 'e'){
       esc.write(slowSpeedValue);
-      Serial3.println("Slow!");
+      Serial.println("Slow!");
+    }else if(getData =='r'){
+      esc.write(reverseSpeedValue);
+      Serial.println("Reverse reverse!");
     }else if(getData == 'o'){
       steeringValue++;
-      Serial3.println("Steer:");
-      Serial3.println(steeringValue);
+      Serial.println("Steer:");
+      Serial.println(steeringValue);
     }else if(getData == 'p'){
       steeringValue--;
-      Serial3.println("Steer:");
-      Serial3.println(steeringValue);
+      Serial.println("Steer:");
+      Serial.println(steeringValue);
     }else if(getData == 'k'){
       slowSpeedValue++;
-      Serial3.println("Slow Speed:");
-      Serial3.println(slowSpeedValue);
+      Serial.println("Slow Speed:");
+      Serial.println(slowSpeedValue);
     }else if(getData == 'l'){
       slowSpeedValue--;
-      Serial3.println("Slow Speed:");
-      Serial3.println(slowSpeedValue);
+      Serial.println("Slow Speed:");
+      Serial.println(slowSpeedValue);
     }
     steering.write(steeringValue);
   }

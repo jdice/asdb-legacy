@@ -1,7 +1,7 @@
 void timedFunctions(){
   if(millis() - timer100 > 100){
     // Update max speed
-    if(currentSpeed > maxSpeed){
+    if((currentSpeed > maxSpeed) && (currentSpeed < 10000)){
       maxSpeed = currentSpeed;
     }
     
@@ -16,8 +16,10 @@ void timedFunctions(){
     if(jsonPrint){
       aJsonObject *msg = createMessage();
       aJson.print(msg, &serial_stream);
-      Serial3.print("~");
-      Serial3.println();
+      //Serial3.print("~");
+      //Serial3.println();
+      Serial.print("~");
+      Serial.println();
       aJson.deleteItem(msg);
     }
     loopNumber = 0;
@@ -25,7 +27,7 @@ void timedFunctions(){
   }
   
   if(millis() - timer500 > 500){
-    adjustSpeed();
+    //adjustSpeed();
     timer500 = millis();
   }
 }

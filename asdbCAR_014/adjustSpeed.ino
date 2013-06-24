@@ -1,18 +1,18 @@
 void adjustSpeed(){
-  if(adjustMySpeed){
+  /*if(adjustMySpeed){
     if( (currentSpeed > (goalSpeed + speedTolerance)) && (speedValue < 85) ){
       speedValue++;
     }
     if( (currentSpeed < (goalSpeed - speedTolerance)) && (speedValue > 65) ){
       speedValue--;
     }
-  }
+  }*/
 }
 
 void writeSpeed(){
   //stop criteria
   if(!stopOverrides){
-    if(xbeeStop || rangefinderStop || bumperStop){ // all optional stopping conditions
+    if(buttonStop || xbeeStop || bumperStop){ // all optional stopping conditions except rangefinder
       if(drivetrainEnabled){
         brakeMode = true;
         brakeTimer = millis()+brakeDuration;
@@ -22,7 +22,7 @@ void writeSpeed(){
       drivetrainEnabled = true;
     }
   }else{
-    if(xbeeStop){ // all absolute stopping conditions
+    if(buttonStop || xbeeStop){ // all absolute stopping conditions
       if(drivetrainEnabled){
         brakeMode = true;
         brakeTimer = millis()+brakeDuration;
@@ -38,7 +38,13 @@ void writeSpeed(){
       if(slowMode){
         speedValue = slowSpeedValue;
       }else{
-        speedValue = fastSpeedValue;
+        if(distanceToGoal < slowLimit){
+          speedValue = slowSpeedValue;
+        }else if(distanceToGoal < fastLimit){
+          speedValue = map(distanceToGoal, slowLimit, fastLimit, slowSpeedValue, fastSpeedValue);
+        }else{
+          speedValue = fastSpeedValue;
+        }
       }
       adjustMySpeed = false;
     }
